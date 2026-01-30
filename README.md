@@ -6,7 +6,7 @@ STABSim is a quantum stabilizer simulator for QEC and more, with GPU integration
 ## Supported Gates
 
 Gate support is being continuouly updated. Currently supported Clifford gates:
-- CX(control,target), H, S, SDG, CY, CZ, RX($\pm \pi/2$), RY($\pm \pi/2$)
+- CX(control,target), H, S, SDG, CY, CZ, RX($\pm \pi$/2), RY($\pm \pi$/2)
 
 Supported non-Clifford gates(in testing):
 - One non-commuting RZ($\phi$) per-circuit, by adding an extra phase column and tracking branch coefficients
