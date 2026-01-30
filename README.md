@@ -1,5 +1,7 @@
 # STABSim
-STABSim is a quantum stabilizer simulator for QEC and more, with GPU integration. STABSim circuits can be created directly in C++ or made using Python. QASM circuits can also be passed through to create circuits using qasm_extraction.hpp. GPU integration provides a speedup in very wide circuits by utilizing CUDA warp primitives and wide parallelism for individual gates. MPI is utilized in both methods as a speedup for sampling -- utilizing more CPU cores and more GPU's allow many more samples to be produced in noisy simulation. Implementation details can be found here [STABSim](https://arxiv.org/abs/2507.03092)
+STABSim is a quantum stabilizer simulator for QEC and more, with GPU integration. STABSim circuits can be created directly in C++ or made using Python. QASM circuits can also be passed through to create circuits using qasm_extraction.hpp. GPU integration provides a speedup in very wide circuits by utilizing CUDA warp primitives and wide parallelism for individual gates. MPI is utilized in both methods as a speedup for sampling -- utilizing more CPU cores and more GPU's allow many more samples to be produced in noisy simulation. 
+
+### Implementation details and citation for usage can be found here [arXiv:2507.03092](https://arxiv.org/abs/2507.03092)
 
 ##
 
@@ -17,19 +19,4 @@ Currently supported noise gates:
 - DAMP(relax p, decohere p): Qubit relaxation and phase decoherence
 - T1(relax p): Qubit relaxation
 - T2(decohere p): Qubit phase decoherence
-### Note: Non-Clifford noise sources are decomposed into probabilistic stabilizer gates. Since the stabilizer decomposition has some negative coefficients, it requires quasiprobability sampling to converge exactly. Details on how this is done can be found in [Exact and Efficient Thermal Errors](https://arxiv.org/abs/2512.09189)
-
-
-## Citation
-
-Use of this repo can be cited with the follow,
-
-@misc{garner2025stabsimparallelizedcliffordsimulator,
-      title={STABSim: A Parallelized Clifford Simulator with Features Beyond Direct Simulation}, 
-      author={Sean Garner and Chenxu Liu and Meng Wang and Samuel Stein and Ang Li},
-      year={2025},
-      eprint={2507.03092},
-      archivePrefix={arXiv},
-      primaryClass={quant-ph},
-      url={https://arxiv.org/abs/2507.03092}, 
-}
+### Note: Non-Clifford noise sources are decomposed into probabilistic stabilizer gates. Since the stabilizer decomposition has some negative coefficients, it requires quasiprobability sampling to converge exactly. Details on how this is done can be found in [arXiv:2507.03092](https://arxiv.org/abs/2512.09189)
