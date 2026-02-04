@@ -49,6 +49,7 @@ namespace NWQSim
                 x[i][i] = 1;
                 z[i+n][i] = 1;
             }
+            rz_flag = false;
             
             std::random_device rd;
             rng.seed(rd());
@@ -118,6 +119,7 @@ namespace NWQSim
                 std::fill(row.begin(), row.end(), 0);
             }
             std::fill(r.begin(), r.end(), 0);
+            if(rz_flag) std::fill(rz_r.begin(), rz_r.end(), 0);
             //The 2n+1 th row is scratch space
 
             //Intialize the identity tableau
@@ -132,6 +134,8 @@ namespace NWQSim
 
             m_results.clear();
             m_results.reserve(est_measurements);
+
+            rz_flag = false;
 
             has_destabilizers = true;
         }
@@ -233,7 +237,13 @@ namespace NWQSim
                 {
                     std::cout << z[i][j];
                 }
-                std::cout << "|" << r[i] << std::endl;
+                std::cout << "|" << r[i];
+
+                if(rz_flag==true)
+                {
+                    std::cout << "|" << rz_r[i];
+                }
+                std::cout << std::endl;
             }
             std::cout << std::endl;
         }
@@ -830,20 +840,25 @@ namespace NWQSim
             // printf("m%d sum: %d\n", measurement_count, sum);
             // printf("r[i]%d: %d\n", measurement_count, r[i]);
             
+            // std::cout << "r[" << h << "]" <<  " before if = " <<  r[h] << std::endl;
 
+            // printf("r[h]%d: %d\n", measurement_count, r[h]);
 
-            sum += 2*r[i];
-
-            sum += 2*r[h];
+            int rowsum = sum + 2*r[h] + 2*r[i];
             //  printf("m%d sum: %d\n", *d_measurement_idx_counter, total);
 
             // printf("m%d tot: %d\n", measurement_count, sum);
             
-            r[h] = (sum % 4 == 0) ? 0 : 1;
+            r[h] = (rowsum % 4 == 0) ? 0 : 1;
 
-            // printf("r[h]%d: %d\n", measurement_count, r[h]);
+            if(rz_flag)
+            {
+                int rzsum = sum + 2*rz_r[h]+ 2*rz_r[i];
+                rz_r[h] = (rzsum % 4 == 0) ? 0 : 1;
+            }
 
-            // std::cout << "r[" << h << "]" <<  " after if = " <<  r[h] << std::endl;
+
+            std::cout << "r[" << h << "]" <<  " after if = " <<  r[h] << std::endl;
 
 
         } //End rowsum
@@ -1328,9 +1343,17 @@ namespace NWQSim
         std::vector<std::vector<int>> x;
         std::vector<std::vector<int>> z;
         std::vector<int> r;
+
+        bool rz_flag;
+        std::vector<int> rz_r;
+        std::pair<double, double> rz_coeff;
+
+
         std::vector<std::vector<int>> x_erasure;
         std::vector<std::vector<int>> z_erasure;
         std::vector<int> r_erasure;
+
+
 
         std::vector<int32_t> m_results;
 
@@ -1348,6 +1371,7 @@ namespace NWQSim
             for(int i = 0; i < rows-1; i++)
             {
                 r[i] ^= z[i][q];
+                if(rz_flag) rz_r[i] ^= z[i][q];
             }
         }
         void apply_Y(int q)
@@ -1355,6 +1379,7 @@ namespace NWQSim
             for(int i = 0; i < rows-1; i++)
             {
                 r[i] ^= (x[i][q] ^ z[i][q]);
+                if(rz_flag) rz_r[i] ^= (x[i][q] ^ z[i][q]);
             }
         }
         void apply_Z(int q)
@@ -1362,108 +1387,9 @@ namespace NWQSim
             for(int i = 0; i < rows-1; i++)
             {
                 r[i] ^= x[i][q];
+                if(rz_flag) rz_r[i] ^= x[i][q];
             }
         }
-
-        // void rowsum_simd(int h, int i)
-        // {
-        //     using batch_type = xsimd::batch<int>;
-        //     const std::size_t batch_size = batch_type::size;
-            
-        //     batch_type sum_batch(0);
-
-        //     std::size_t j = 0;
-        //     for (; j + batch_size <= n; j += batch_size)
-        //     {
-        //         batch_type x_i = batch_type::load_unaligned(&x[i][j]);
-        //         batch_type z_i = batch_type::load_unaligned(&z[i][j]);
-        //         batch_type x_h = batch_type::load_unaligned(&x[h][j]);
-        //         batch_type z_h = batch_type::load_unaligned(&z[h][j]);
-
-        //         // Vectorized sum calculation based on conditions
-        //         batch_type term1 = (z_h - x_h) & (x_i & z_i);
-        //         batch_type term2 = (z_h * (2 * x_h - 1)) & (x_i & ~z_i);
-        //         batch_type term3 = (x_h * (1 - 2 * z_h)) & (~x_i & z_i);
-        //         sum_batch += term1 + term2 + term3;
-
-        //         // Vectorized XOR operations
-        //         x_h ^= x_i;
-        //         z_h ^= z_i;
-
-        //         x_h.store_unaligned(&x[h][j]);
-        //         z_h.store_unaligned(&z[h][j]);
-        //     }
-
-        //     // Scalar part for remaining elements
-        //     int sum = xsimd::hadd(sum_batch);
-        //     for (; j < n; ++j)
-        //     {
-        //         if (x[i][j] == 1 && z[i][j] == 1)
-        //             sum += z[h][j] - x[h][j];
-        //         else if (x[i][j] == 1 && z[i][j] == 0)
-        //             sum += z[h][j] * (2 * x[h][j] - 1);
-        //         else if (x[i][j] == 0 && z[i][j] == 1)
-        //             sum += x[h][j] * (1 - 2 * z[h][j]);
-
-        //         x[h][j] = x[i][j] ^ x[h][j];
-        //         z[h][j] = z[i][j] ^ z[h][j];
-        //     }
-
-        //     sum += 2 * r[i];
-        //     sum += 2 * r[h];
-        //     r[h] = (sum % 4 == 0) ? 0 : 1;
-        // }
-
-        // void batched_M()
-        // {
-        //     int p = -1;
-        //     for (int p_index = cols; p_index < rows - 1; p_index++)
-        //     {
-        //         if (x[p_index][a])
-        //         {
-        //             p = p_index;
-        //             break;
-        //         }
-        //     }
-
-        //     if (p > -1) // Random case
-        //     {
-        //         for (int i = 0; i < rows - 1; i++)
-        //         {
-        //             if ((x[i][a]) && (i != p))
-        //             {
-        //                 rowsum_simd(i, p);
-        //             }
-        //         }
-        //         x[p - cols] = x[p];
-        //         z[p - cols] = z[p];
-        //         std::fill(x[p].begin(), x[p].end(), 0);
-        //         std::fill(z[p].begin(), z[p].end(), 0);
-
-        //         int randomBit = prng_bit(seed, measurement_count);
-        //         r[p] = randomBit;
-        //         z[p][a] = 1;
-        //         m_results.push_back(randomBit);
-        //         measurement_count++;
-        //     }
-        //     else // Deterministic case
-        //     {
-        //         std::fill(x[rows - 1].begin(), x[rows - 1].end(), 0);
-        //         std::fill(z[rows - 1].begin(), z[rows - 1].end(), 0);
-        //         r[rows - 1] = 0;
-
-        //         for (int i = 0; i < cols; i++)
-        //         {
-        //             if (x[i][a] == 1)
-        //             {
-        //                 rowsum_simd(rows - 1, i + cols);
-        //             }
-        //         }
-        //         m_results.push_back(r[rows - 1]);
-        //         measurement_count++;
-        //     }
-        // }
-
 
         //Function to swap two rows of the tableau
         void swapRows(int row1, int row2) {
@@ -2118,6 +2044,13 @@ namespace NWQSim
             }
         }
 
+        void reset_rz()
+        {
+            rz_flag = false;
+            rz_coeff = {1.0,0.0};
+            rz_r.resize(rows,0);
+        }
+
         void simulation_kernel(std::vector<Gate>& gates)
         {
             int g = gates.size();
@@ -2135,10 +2068,12 @@ namespace NWQSim
                 for (int i = 0; i < rows - 1; i++)
                 {
                     r[i] ^= (x[i][target] & z[i][target]);
+                    if(rz_flag) rz_r[i] ^= (x[i][target] & z[i][target]);
                     int temp = x[i][target];
                     x[i][target] = z[i][target];
                     z[i][target] = temp;
                 }
+
             };
 
             auto apply_s_gate = [&](IdxType target)
@@ -2150,9 +2085,12 @@ namespace NWQSim
                 for (int i = 0; i < rows - 1; i++)
                 {
                     r[i] ^= (x[i][target] & z[i][target]);
+                    if(rz_flag) rz_r[i] ^= (x[i][target] & z[i][target]);
                     z[i][target] ^= x[i][target];
                 }
             };
+
+
             //Loop over every gate in the circuit and apply them
             for (int k = 0; k < g; k++)
             {
@@ -2170,6 +2108,8 @@ namespace NWQSim
                         {
                             //Phase
                             r[i] = r[i] ^ (x[i][a] & z[i][b] & (x[i][b]^z[i][a]^1));
+                            if(rz_flag) rz_r[i] ^= (x[i][a] & z[i][b] & (x[i][b]^z[i][a]^1));
+
 
                             //Entry
                             x[i][b] ^= x[i][a];
@@ -2178,82 +2118,83 @@ namespace NWQSim
                         break;
                     }
 
-                    case OP::CX_MULTI:
-                    {
-                        auto apply_cx_pair = [&](IdxType ctrl, IdxType target)
-                        {
-                            if (ctrl < 0 || ctrl >= cols || target < 0 || target >= cols)
-                            {
-                                return;
-                            }
-                            for (int i = 0; i < rows - 1; i++)
-                            {
-                                r[i] ^= (x[i][ctrl] & z[i][target] & (x[i][target] ^ z[i][ctrl] ^ 1));
-                                x[i][target] ^= x[i][ctrl];
-                                z[i][ctrl] ^= z[i][target];
-                            }
-                        };
+                    // case OP::CX_MULTI:
+                    // {
+                    //     auto apply_cx_pair = [&](IdxType ctrl, IdxType target)
+                    //     {
+                    //         if (ctrl < 0 || ctrl >= cols || target < 0 || target >= cols)
+                    //         {
+                    //             return;
+                    //         }
+                    //         for (int i = 0; i < rows - 1; i++)
+                    //         {
+                    //             r[i] ^= (x[i][ctrl] & z[i][target] & (x[i][target] ^ z[i][ctrl] ^ 1));
+                    //             x[i][target] ^= x[i][ctrl];
+                    //             z[i][ctrl] ^= z[i][target];
+                    //         }
+                    //     };
 
-                        if (gate.mod_qubits.empty())
-                        {
-                            apply_cx_pair(gate.ctrl, gate.qubit);
-                        }
-                        else
-                        {
-                            const auto &pairs = gate.mod_qubits;
-                            for (size_t idx = 0; idx + 1 < pairs.size(); idx += 2)
-                            {
-                                apply_cx_pair(pairs[idx], pairs[idx + 1]);
-                            }
-                        }
-                        break;
-                    }
+                    //     if (gate.mod_qubits.empty())
+                    //     {
+                    //         apply_cx_pair(gate.ctrl, gate.qubit);
+                    //     }
+                    //     else
+                    //     {
+                    //         const auto &pairs = gate.mod_qubits;
+                    //         for (size_t idx = 0; idx + 1 < pairs.size(); idx += 2)
+                    //         {
+                    //             apply_cx_pair(pairs[idx], pairs[idx + 1]);
+                    //         }
+                    //     }
+                    //     break;
+                    // }
 
                     case OP::H:
                         apply_h_gate(a);
                         break;
 
-                    case OP::H_MULTI:
-                    {
-                        if (gate.mod_qubits.empty())
-                        {
-                            apply_h_gate(a);
-                        }
-                        else
-                        {
-                            for (auto target : gate.mod_qubits)
-                            {
-                                apply_h_gate(target);
-                            }
-                        }
-                        break;
-                    }
+                    // case OP::H_MULTI:
+                    // {
+                    //     if (gate.mod_qubits.empty())
+                    //     {
+                    //         apply_h_gate(a);
+                    //     }
+                    //     else
+                    //     {
+                    //         for (auto target : gate.mod_qubits)
+                    //         {
+                    //             apply_h_gate(target);
+                    //         }
+                    //     }
+                    //     break;
+                    // }
         
                     case OP::S:
                         apply_s_gate(a);
                         break;
 
-                    case OP::S_MULTI:
-                    {
-                        if (gate.mod_qubits.empty())
-                        {
-                            apply_s_gate(a);
-                        }
-                        else
-                        {
-                            for (auto target : gate.mod_qubits)
-                            {
-                                apply_s_gate(target);
-                            }
-                        }
-                        break;
-                    }
+                    // case OP::S_MULTI:
+                    // {
+                    //     if (gate.mod_qubits.empty())
+                    //     {
+                    //         apply_s_gate(a);
+                    //     }
+                    //     else
+                    //     {
+                    //         for (auto target : gate.mod_qubits)
+                    //         {
+                    //             apply_s_gate(target);
+                    //         }
+                    //     }
+                    //     break;
+                    // }
 
                     case OP::SDG:
                         for(int i = 0; i < rows-1; i++)
                         {
                             //Phase -- Equal to Z S or x & !z
                             r[i] ^= x[i][a] ^ (x[i][a] & z[i][a]);
+                            if(rz_flag) rz_r[i] ^= x[i][a] ^ (x[i][a] & z[i][a]);
 
                             //Entry
                             z[i][a] ^= x[i][a];
@@ -2423,7 +2364,8 @@ namespace NWQSim
                                 for(int i = 0; i < rows-1; i++)
                                 {
                                     //Phase
-                                    r[i] ^= x[i][a];
+                                    // r[i] ^= x[i][a];
+                                    apply_Z(a);
                                 }
                                 break;
                             case 2: //Reset to |0>
@@ -2441,7 +2383,8 @@ namespace NWQSim
                             for(int i = 0; i < rows-1; i++)
                             {
                                 //Phase
-                                r[i] ^= x[i][a];
+                                // r[i] ^= x[i][a];
+                                apply_Z(a);
                             }
                         }
                         break;
@@ -2456,15 +2399,17 @@ namespace NWQSim
                                 for(int i = 0; i < rows-1; i++)
                                 {
                                     //Phase
-                                    r[i] ^= x[i][a];
+                                    // r[i] ^= x[i][a];
+                                    apply_Z(a);
                                 }
                                 break;
                             case 2: 
                                 reset_routine(a); //Reset to |0>
                                 for(int i = 0; i < rows-1; i++) //Apply X
                                 {
-                                    //Phase
-                                    r[i] ^= z[i][a];
+                                    //Bit
+                                    // r[i] ^= z[i][a];
+                                    apply_X(a);
                                 }
                                 break;
                             default:
@@ -2535,6 +2480,55 @@ namespace NWQSim
                         }
                         break;
                     
+                    case OP::RZ:
+                        //H X -- X : r[i] ^= z[i][a]
+                        if(gate.theta == PI/2)
+                        {
+                            apply_s_gate(a);
+                        }
+                        //X H
+                        else if(gate.theta == -PI/2)
+                        {
+                            apply_s_gate(a);
+                            apply_Z(a);
+                        }
+                        else if(gate.theta == PI)
+                        {
+                            apply_Z(a);
+                        }
+                        else if(rz_flag == false)
+                        {
+                            rz_r.resize(rows, 0);
+                            for(int i = 0; i < rows-1; i++)
+                            {
+                                if(x[i][a])
+                                {
+                                    rz_r[i] = r[i]^x[i][a];
+                                    rz_flag = true;
+                                }
+                            }
+                            if(rz_flag == true)
+                            {
+                                rz_coeff.first = cos(gate.theta/2);
+                                // std::cout << "cos: " << rz_coeff.first << std::endl;
+                                rz_coeff.second = sin(gate.theta/2);
+                            }
+                        }
+                        // else
+                        // {
+                        //     double monte = random_float(rng);
+                        //     monte -= sin(gate.theta);
+                        //     if(monte < 0){apply_s_gate(a); break;}
+                        // }
+                        else
+                        {
+                            std::cout << "Non-Clifford angle in RZ gate! Arbitrary RZ already used: "
+                                    << OP_NAMES[gate.op_name] << "(" << gate.phi << ")" << std::endl;
+                            std::logic_error("Invalid gate type");
+                            exit(1);
+                        }
+                        break;
+
                     case OP::RY:
                         //H X -- X : r[i] ^= z[i][a]
                         if(gate.theta == PI/2)
@@ -2594,6 +2588,8 @@ namespace NWQSim
                             exit(1);
                         }
                         break;
+
+
                     case OP::CY:
                     {
                         int a = gate.ctrl;
@@ -2686,7 +2682,6 @@ namespace NWQSim
                                 {
                                     rowsum(i, p);
                                     // printf("rand r%d row%d\n", r[i], i);
-
                                 }
                             }
                             
@@ -2698,17 +2693,41 @@ namespace NWQSim
                                 x[p][i] = 0;
                                 z[p][i] = 0;                        
                             }
+                            
+                            if(rz_flag && (r[p] != rz_r[p]))
+                            {
+                                double random = prng_uniform01(seed, measurement_count);
+                                std::cout << "Rand random: " << random << std::endl;
 
-                            int randomBit = prng_bit(seed, measurement_count);
-                            // printf("rand m%d, res%d\n",  measurement_count, randomBit);
+                                // std::cout << "Rand cos2: " << pow(rz_coeff.first,2) << std::endl;
+                                
+                                if (random < pow(rz_coeff.first, 2))
+                                {
+                                    m_results.push_back(r[p]);
+                                }
+                                else 
+                                {
+                                    m_results.push_back(rz_r[p]);
+                                    for(int i = 0; i < rows-1; i++)
+                                        r[i] = rz_r[i];
+                                }
+                                reset_rz();
+                            }
 
-                            // std::cout << "Seed for measurement " << measurement_count << ": " << seed << std::endl;
-                            r[p] = randomBit;
+                            else
+                            {
+                                int randomBit = prng_bit(seed, measurement_count);
+                                r[p] = randomBit;
+                                if(rz_flag) rz_r[p] = randomBit;
+                                m_results.push_back(randomBit);
+                            }
+
                             z[p][a] = 1;
                             
                             // std::cout << "Random measurement " << measurement_count << ": " << randomBit << std::endl;
-                            m_results.push_back(randomBit);
+
                             measurement_count++;
+                        
                         }
                         //Deterministic
                         else
@@ -2732,8 +2751,28 @@ namespace NWQSim
                                     // printf("determ r%d row%lld\n", r[rows-1], i+half_rows);
                                 }
                             }
-                            // std::cout << "Determ measurement " << measurement_count << ": " << r[rows-1] << std::endl;
-                            m_results.push_back(r[rows-1]);
+                            if(rz_flag && (r[rows-1] != rz_r[rows-1]))
+                            {
+                                double random = prng_uniform01(seed, measurement_count);
+                                std::cout << "Determ rand: " << random << std::endl;
+
+                                // std::cout << "Determ cos2: " << pow(rz_coeff.first,2) << std::endl;
+                                
+                                if(random < pow(rz_coeff.first, 2))
+                                {
+                                    m_results.push_back(r[rows-1]);
+                                }
+                                else 
+                                {
+                                    m_results.push_back(rz_r[rows-1]);
+                                    for(int i = 0; i < rows-1; i++)
+                                        r[i] = rz_r[i];
+                                }
+                                reset_rz();
+                            }
+                            else 
+                                m_results.push_back(r[rows-1]);
+                                
                             // printf("determ m%d, res%d\n",  measurement_count, r[rows-1]);
                             measurement_count++;
                         }
@@ -2766,25 +2805,67 @@ namespace NWQSim
                                 if((x[i][a]) && (i != p))
                                 {
                                     rowsum(i, p);
+                                    // printf("rand r%d row%d\n", r[i], i);
+
                                 }
                             }
                             
                             x[p-half_rows] = x[p];
                             z[p-half_rows] = z[p];
+                            
                             //Change all the columns in row p to be 0
                             for(int i = 0; i < n; i++)
                             {
                                 x[p][i] = 0;
                                 z[p][i] = 0;                        
                             }
+                            int randomBit = 0;
 
-                            int randomBit = prng_bit(seed, measurement_count);
-                            // std::cout << "Seed for measurement " << measurement_count << ": " << seed << std::endl;
-                            r[p] = randomBit;
+                            if(rz_flag && (r[p] != rz_r[p]))
+                            {
+                                double random = prng_uniform01(seed, measurement_count);
+                                std::cout << "Rand random: " << random << std::endl;
+
+                                // std::cout << "Rand cos2: " << pow(rz_coeff.first,2) << std::endl;
+                                
+                                if(random < pow(rz_coeff.first, 2))
+                                {
+                                    randomBit = r[p];
+                                }
+                                else 
+                                {
+                                    randomBit = rz_r[p];
+                                    for(int i = 0; i < rows-1; i++)
+                                        r[i] = rz_r[i];
+                                }
+                                reset_rz();
+                            }
+                            else
+                            {
+                                randomBit = prng_bit(seed, measurement_count);
+                                r[p] = randomBit;
+                                if(rz_flag) rz_r[p] = randomBit;
+                            }
+
+                            if(randomBit)
+                            {
+                                if(rz_flag)
+                                {
+                                    for(int i = 0; i < rows-1; i++)
+                                    {
+                                        r[i] ^= z[i][a];
+                                        rz_r[i] ^= z[i][a];
+                                    }
+                                }
+                                else
+                                {
+                                    for(int i = 0; i < rows-1; i++)
+                                    {
+                                        r[i] ^= z[i][a];
+                                    }
+                                }
+                            }
                             z[p][a] = 1;
-
-                            temp_result = r[p];
-                            // std::cout << "Random measurement at qubit " << a << " value: " << (r[p] << a) << std::endl;
                         }
                         //Deterministic
                         else
@@ -2803,16 +2884,55 @@ namespace NWQSim
                             {
                                 if(x[i][a] == 1)
                                 {
+                                    // printf("r[row]%d ", r[i+half_rows]);
                                     rowsum(rows-1, i+half_rows);
+                                    // printf("determ r%d row%lld\n", r[rows-1], i+half_rows);
                                 }
                             }
-                            // std::cout << "Deterministc measurement at qubit " << a << " value: " << (r[rows-1] << a) << std::endl;
-                            temp_result = r[rows-1];
-                        }
-                        // measurement_results.push_back(temp_result);
-                        if(temp_result == 1) //Apply X to flip back to 0
-                        {
-                            apply_X(a);
+                            if(rz_flag && (r[rows-1] != rz_r[rows-1])) //Case: branches disagree on measurement outcome. Collapse the branching.
+                            {
+                                double random = prng_uniform01(seed, measurement_count);
+                                std::cout << "Determ rand: " << random << std::endl;
+
+                                // std::cout << "Determ cos2: " << pow(rz_coeff.first,2) << std::endl;
+                                
+                                if(random < pow(rz_coeff.first, 2))
+                                {
+                                    m_results.push_back(r[rows-1]);
+                                }
+                                else 
+                                {
+                                    m_results.push_back(rz_r[rows-1]);
+                                    for(int i = 0; i < rows-1; i++)
+                                        r[i] = rz_r[i];
+                                }
+                                reset_rz();
+                                if(r[rows-1] == 1) //Apply X to the updated r column
+                                {
+                                    for(int i = 0; i < rows-1; i++)
+                                    {
+                                        r[i] ^= z[i][a];
+                                    }
+                                }
+                            }
+                            else if(rz_flag && (r[rows-1] == 1)) //Case: both branches agree on one. Apply X to both to flip back to 0.
+                            {
+                                for(int i = 0; i < rows-1; i++)
+                                {
+                                    r[i] ^= z[i][a];
+                                    rz_r[i] ^= z[i][a];
+                                }
+                            }
+                            else if(r[rows-1] == 1) //Case: no branching, just flip r if it resulted in 1.
+                            {
+                                for(int i = 0; i < rows-1; i++)
+                                {
+                                    r[i] ^= z[i][a];
+                                }
+                            }
+                            else //Case: r resulted in 0, no flip needed (if rz_r disagreed the first case would handle it).
+                                continue;
+
                         }
                         break;
                     }
