@@ -234,6 +234,17 @@ bool appendQASMToCircuit(std::shared_ptr<NWQSim::Circuit>& circuit, const std::s
                     circuit->H(qubits);
                 }
             }
+            else if(gate == "rz")
+            {
+                auto params = extract_params(gate_full);
+                std::string qubitStr;
+                lineStream >> qubitStr;
+                qubit1 = extractQubitIndex(qubitStr);
+                if (!params.empty() && qubit1 != -1)
+                {
+                    circuit->RZ(params[0], qubit1);
+                }
+            }
             else if(gate == "m" || gate == "measure")
             {
                 std::string qubitStr;

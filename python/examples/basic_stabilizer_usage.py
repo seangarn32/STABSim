@@ -16,9 +16,10 @@ def main() -> None:
         circuit.h(i-1)
         circuit.m(i-1)
 
+
     state = create_state(backend, num_qubits, method)
     sim_time_ms = state.simulate(circuit)
-    # samples = state.measure_all(1024)
+    
     samples = state.measurement_results()
 
     print(f"Simulated {len(samples)} shots in {sim_time_ms:.3f} ms")
