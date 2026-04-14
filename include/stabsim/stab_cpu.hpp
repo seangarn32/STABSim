@@ -2459,7 +2459,16 @@ namespace NWQSim
                         }
                         else if(rz_flag == false)
                         {
-                            // std::cout << "Applying RZ" << std::endl;
+                        //     double random = prng_uniform01(seed, measurement_count);
+                        //     double sum = std::abs(sin(gate.theta/2))/(std::abs(sin(gate.theta/2))+std::abs(cos(gate.theta/2)));
+                        //     std::cout << sum << std::endl;
+                        //     if(random < sum)
+                        //     {
+                        //         apply_Z(a);
+                        //             weight *= gamma * (s >= 0 ? -std::complex<double>(0,1) :  std::complex<double>(0,1));
+                        //     }
+                        // }
+                        // //     // std::cout << "Applying RZ" << std::endl;
                             rz_r.assign(rows, 0);
                             for(int i = 0; i < rows-1; i++)
                             {
@@ -2626,9 +2635,17 @@ namespace NWQSim
                             }
                         }
                         // std::cout << "p = " << p << std::endl;
-                        //A p such that x[p][a] = 1 exists
-                        //Random
-                        if(p > -1)
+                        bool rz_rand = false;
+                        if(rz_flag && p > -1)
+                        {
+                            if((r[p] == !rz_r[p-half_rows]) || (rz_r[p] == !r[p-half_rows]))
+                            {
+                                rz_rand = true;
+                            }
+                        }
+
+                        //RZ random
+                        if(p > -1 && rz_rand)
                         {
                             // std::cout << "CPU p = " << p << std::endl;
                             for(int i = 0; i < rows-1; i++)
@@ -2653,7 +2670,7 @@ namespace NWQSim
                             if(rz_flag && (r[p] != rz_r[p]))
                             {
                                 double random = prng_uniform01(seed, measurement_count);
-                                std::cout << "first norm: " << std::norm(rz_coeff.second)<< std::endl;   
+                                // std::cout << "RZ Random " << std::endl;   
                                 double sum = .5 * (1 + std::real(rz_coeff.first * std::complex<double>(0,1)
                                  * rz_coeff.second + rz_coeff.first * std::complex<double>(0,1) * rz_coeff.second));
                                 // std::cout << "Sum: " << sum << std::endl;          
@@ -2677,17 +2694,50 @@ namespace NWQSim
                                 if(rz_flag) rz_r[p] = randomBit;
                                 m_results.push_back(randomBit);
                             }
-
-                            z[p][a] = 1;
                             
+                            z[p][a] = 1;
                             // std::cout << "Random measurement " << measurement_count << ": " << randomBit << std::endl;
-
                             measurement_count++;
+                        }
+
+                        //True Random
+                        else if(p > -1)
+                        {
+                            // std::cout << "CPU p = " << p << std::endl;
+                            for(int i = 0; i < rows-1; i++)
+                            {
+                                // std::cout << "x = " << x[i][a] << std::endl;
+                                if((x[i][a]) && (i != p))
+                                {
+                                    rowsum(i, p);
+                                    // printf("rand r%d row%d\n", r[i], i);
+                                }
+                            }
+                            
+                            x[p-half_rows] = x[p];
+                            z[p-half_rows] = z[p];
+                            //Change all the columns in row p to be 0
+                            for(int i = 0; i < n; i++)
+                            {
+                                x[p][i] = 0;
+                                z[p][i] = 0;                        
+                            }
                         
+                            double random = prng_bit(seed, measurement_count);
+                            // std::cout << "True Random " << std::endl;  
+                            r[p] = random;
+                            rz_r[p] = random;
+                            m_results.push_back(random);
+
+                            // if(rz_flag) reset_rz();
+                                
+                            z[p][a] = 1;
+                            measurement_count++;
                         }
                         //Deterministic
                         else
                         {
+                            // std::cout << "Deterministic " << std::endl;  
                             //Set the scratch space row to be 0
                             //i is the column indexer in this case
                             for(int i = 0; i < n; i++)
